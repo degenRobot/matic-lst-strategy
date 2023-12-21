@@ -18,6 +18,10 @@ interface IFactory {
     function set_protocol_fee_recipient(address) external;
 }
 
+interface IPoolConfigurator {
+    function setSupplyCap(address _asset, uint256 _supplyCap) external;
+}
+
 contract Setup is ExtendedTest, IEvents {
     // Contract instances that we will use repeatedly.
     ERC20 public asset;
@@ -34,23 +38,24 @@ contract Setup is ExtendedTest, IEvents {
     // Address of the real deployed Factory
     address public factory;
 
+    
+    address public constant AAVE_ADMIN = 0xDf7d0e6454DB638881302729F5ba99936EaAB233;
+    IPoolConfigurator public poolConfigurator;
+
     // Integer variables that will be used repeatedly.
     uint256 public decimals;
     uint256 public MAX_BPS = 10_000;
 
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
-    uint256 public maxFuzzAmount = 1e30;
-    uint256 public minFuzzAmount = 10_000;
+    uint256 public maxFuzzAmount = 1e11;
+    uint256 public minFuzzAmount = 1e5;
 
     // Default profit max unlock time is set for 10 days
     uint256 public profitMaxUnlockTime = 10 days;
 
     function setUp() public virtual {
-        _setTokenAddrs();
-
         // Set asset
-        asset = ERC20(tokenAddrs["DAI"]);
-
+        asset = ERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);    
         // Set decimals
         decimals = asset.decimals();
 
@@ -73,6 +78,10 @@ contract Setup is ExtendedTest, IEvents {
         IStrategyInterface _strategy = IStrategyInterface(
             address(new Strategy(address(asset), "Tokenized Strategy"))
         );
+
+        poolConfigurator = IPoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
+        vm.prank(AAVE_ADMIN);
+        poolConfigurator.setSupplyCap(address(asset), 0);
 
         // set keeper
         _strategy.setKeeper(keeper);

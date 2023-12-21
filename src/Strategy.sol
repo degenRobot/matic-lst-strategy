@@ -23,7 +23,8 @@ import {FundManagement} from "./interfaces/balancer/IBalancerV2.sol";
 import {JoinPoolRequest} from "./interfaces/balancer/IBalancerV2.sol";
 import {ExitPoolRequest} from "./interfaces/balancer/IBalancerV2.sol";
 
-import {IGauge} from "./interfaces/balancer/IGauge.sol";
+import {IAura} from "./interfaces/aura/IAura.sol";
+import {IBaseRewardPool} from "./interfaces/aura/IAura.sol";
 
 /**
  * The `TokenizedStrategy` variable can be used to retrieve the strategies
@@ -53,26 +54,39 @@ contract Strategy is BaseStrategy {
 
 
     function _setInterfaces() internal {
+        // Tokens
+        wMatic = ERC20(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+        stMatic = ERC20(0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4);
         farmToken = IERC20(0xf28164A485B0B2C90639E47b0f377b4a438a16B1);
+
+        // AAVE Contracts
         IPoolAddressesProvider provider = IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
         pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
         oracle = IAaveOracle(provider.getPriceOracle());
         aToken = IAToken(0x625E7708f30cA75bfd92586e17077590C60eb4cD);
-        debtToken = IVariableDebtToken(0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351);  
+        debtToken = IVariableDebtToken(0x4a1c3aD6Ed28a636ee1751C69071f6be75DEb8B8);  
 
+        // Balancer Contracts
         lpToken = 0xf0ad209e2e969EAAA8C882aac71f02D8a047d5c2;
         balancer = IBalancerV2(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-        gauge = IGauge(0x51416C00388bB4644E28546c77AEe768036F17A8);
 
+        // Farm Contracts
+        aura = IAura(0x8b2970c237656d3895588B99a8bFe977D5618201);
+        baseRewardPool = IBaseRewardPool(0xB97341e9DA2eA5654a0E198184F88eef630E9a63);
 
     }
 
     function _approveContracts() internal {
         asset.approve(address(pool), type(uint256).max);   
+        wMatic.approve(address(pool), type(uint256).max);
+
         wMatic.approve(address(balancer), type(uint256).max);
         stMatic.approve(address(balancer), type(uint256).max);
         farmToken.approve(address(balancer), type(uint256).max);
-        ERC20(lpToken).approve(address(gauge), type(uint256).max);
+        
+        ERC20(lpToken).approve(address(aura), type(uint256).max);
+        ERC20(lpToken).approve(address(balancer), type(uint256).max);
+
     }
 
 
@@ -88,11 +102,11 @@ contract Strategy is BaseStrategy {
     uint256 public collatTarget = 6000;
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
-    uint256 public slippageAdj = 9900; // 99%
+    uint256 public slippageAdj = 0; // 99%
     uint256 public basisPrecision = 10000;
 
     // max Amount of wMatic to be deployed any give time assets deployed (to avoid slippage)
-    uint256 public maxDeploy; 
+    uint256 public maxDeploy = type(uint256).max; 
 
     IPool public pool;
     IAToken public aToken;
@@ -100,8 +114,11 @@ contract Strategy is BaseStrategy {
     IAaveOracle public oracle;
 
     IBalancerV2 public balancer;
-    IGauge public gauge;
     address public lpToken;
+    IAura public aura;
+    IBaseRewardPool public baseRewardPool;
+
+    uint256 pid;
 
     bytes32 public poolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
     bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
@@ -118,21 +135,24 @@ contract Strategy is BaseStrategy {
      * to deposit in the yield source.
      */
     function _deployFunds(uint256 _amount) internal override {
+
+        // Provide collateral to aave 
         _lendWant(_amount);
 
+        // Calculate how much wMatic to borrow 
         uint256 oPrice = getOraclePrice();
         uint256 _borrowAmt = (_amount * collatTarget / basisPrecision) * 1e18 / oPrice;
 
         if (_borrowAmt > maxDeploy) {
             _borrowAmt = maxDeploy;
         }  
-
         _borrow(_borrowAmt);
+        
+        // Swap wMatic for stMatic and enter pool 
         uint256 _swapAmt = _borrowAmt * (basisPrecision - getPoolWMaticWeight()) / basisPrecision;
         _swapToStMatic(_swapAmt);
         _joinPool();
         _depositToGauge();
-
     }
 
     function balanceLend() public view returns (uint256) {
@@ -213,10 +233,7 @@ contract Strategy is BaseStrategy {
     function getOraclePriceLst() public view returns (uint256) {
         uint256 wMaticPrice = oracle.getAssetPrice(address(wMatic));
         uint256 stMaticPrice = oracle.getAssetPrice(address(stMatic));
-        return
-            stMaticPrice*(basisPrecision)/(
-                wMaticPrice
-            );
+        return stMaticPrice*(basisPrecision)/wMaticPrice;
     }
 
     function getPoolWMaticWeight() public view returns (uint256 _wMaticWeight) {
@@ -262,11 +279,11 @@ contract Strategy is BaseStrategy {
     }
 
     function _depositToGauge() internal {
-        gauge.deposit(IERC20(lpToken).balanceOf(address(this)));
+        aura.depositAll(pid, true);
     }
 
     function _withdrawFromGauge(uint256 _amount) internal {
-        gauge.withdraw(_amount);
+        aura.withdraw(pid, _amount, true);
     }
 
     function _exitPool(uint256 _amountOut) internal {
@@ -386,7 +403,7 @@ contract Strategy is BaseStrategy {
     function _freeFunds(uint256 _amount) internal override {
 
         uint256 _percentWithdrawn = _amount * basisPrecision / balanceDeployed();
-        uint256 _gaugeTokensOut = IGauge.balanceOf(address(this)) * _percentWithdrawn / basisPrecision;
+        uint256 _gaugeTokensOut = baseRewardPool.balanceOf(address(this)) * _percentWithdrawn / basisPrecision;
         uint256 _redeemAmt = balanceLend() * _percentWithdrawn / basisPrecision;
 
         _withdrawFromGauge(_gaugeTokensOut);
@@ -431,7 +448,7 @@ contract Strategy is BaseStrategy {
         returns (uint256 _totalAssets)
     {
 
-        gauge.claim_rewards();
+        baseRewardPool.getReward(address(this), true);
         _sellRewards();
         // TODO: Implement harvesting logic and accurate accounting EX:
         //
