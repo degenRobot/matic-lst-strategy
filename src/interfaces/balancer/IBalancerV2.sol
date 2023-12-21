@@ -8,7 +8,7 @@ struct SingleSwap {
     address assetIn;
     address assetOut;
     uint256 amount;
-    bytes userData;
+    uint userData;
 }
 
 struct FundManagement {
@@ -33,6 +33,13 @@ struct ExitPoolRequest {
 }
 
 interface IBalancerV2 {
+
+    enum JoinKind {
+        INIT,
+        EXACT_TOKENS_IN_FOR_BPT_OUT,
+        TOKEN_IN_FOR_EXACT_BPT_OUT,
+        ALL_TOKENS_IN_FOR_EXACT_BPT_OUT
+    }
     function swap(
         SingleSwap memory singleSwap,
         FundManagement memory funds,

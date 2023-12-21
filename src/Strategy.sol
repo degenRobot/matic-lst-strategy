@@ -102,7 +102,7 @@ contract Strategy is BaseStrategy {
     uint256 public collatTarget = 6000;
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
-    uint256 public slippageAdj = 0; // 99%
+    uint256 public slippageAdj = 9000; // 99%
     uint256 public basisPrecision = 10000;
 
     // max Amount of wMatic to be deployed any give time assets deployed (to avoid slippage)
@@ -122,7 +122,6 @@ contract Strategy is BaseStrategy {
 
     bytes32 public poolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
     bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
-
     /**
      * @dev Should deploy up to '_amount' of 'asset' in the yield source.
      *
@@ -268,11 +267,24 @@ contract Strategy is BaseStrategy {
         amtsIn[0] = wMatic.balanceOf(address(this));
         amtsIn[1] = stMatic.balanceOf(address(this));
 
+        uint256 bptOut;
+        uint256 gaugeSupply = IERC20(lpToken).totalSupply();
+        (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
+
+        if (tokens[0] == address(wMatic)) {
+            bptOut = (amtsIn[1] * gaugeSupply / balances[1]) * slippageAdj / basisPrecision;
+        } else {
+            bptOut = (amtsIn[0] * gaugeSupply / balances[0]) * slippageAdj / basisPrecision;
+        }
+
+        bytes memory userData = abi.encode(IBalancerV2.JoinKind.ALL_TOKENS_IN_FOR_EXACT_BPT_OUT, bptOut);
+
+
         // Create the JoinPoolRequest struct in memory
         JoinPoolRequest memory request = JoinPoolRequest({
             assets: assets,
             maxAmountsIn: amtsIn,
-            userData: bytes(""),
+            userData: userData,
             fromInternalBalance: false
         });
         balancer.joinPool(poolId, address(this), address(this), request);
@@ -319,7 +331,7 @@ contract Strategy is BaseStrategy {
             assetIn: address(wMatic),
             assetOut: address(stMatic),
             amount: _amountIn,
-            userData: bytes("")
+            userData: 0
         });
 
         FundManagement memory funds = FundManagement({
@@ -342,7 +354,7 @@ contract Strategy is BaseStrategy {
             assetIn: address(stMatic),
             assetOut: address(wMatic),
             amount: _amountIn,
-            userData: bytes("")
+            userData: 0
         });
 
         FundManagement memory funds = FundManagement({
@@ -365,7 +377,7 @@ contract Strategy is BaseStrategy {
             assetIn: address(farmToken),
             assetOut: address(asset),
             amount: _amountIn,
-            userData: bytes("")
+            userData: 0
         });
 
         FundManagement memory funds = FundManagement({
