@@ -298,7 +298,7 @@ contract Strategy is BaseStrategy {
     }
 
     function _withdrawFromGauge(uint256 _amount) internal {
-        aura.withdraw(pid, _amount, true);
+        baseRewardPool.withdrawAndUnwrap(_amount, false);
     }
 
     function _exitPool(uint256 _amountOut) internal {

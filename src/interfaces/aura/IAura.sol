@@ -12,4 +12,5 @@ interface IAura {
 interface IBaseRewardPool {
     function balanceOf(address _user) external view returns (uint256);
     function getReward(address _user, bool _claimExtras) external;
+    function withdrawAndUnwrap(uint256 amount, bool claim) external;
 }
