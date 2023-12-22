@@ -374,6 +374,25 @@ contract Strategy is BaseStrategy {
     function _sellRewards() internal {
         uint256 _amountIn = farmToken.balanceOf(address(this));
 
+        SingleSwap memory singleSwap = SingleSwap({
+            poolId: 0x0297e37f1873d2dab4487aa67cd56b58e2f27875000100000000000000000002,
+            kind: 0,
+            assetIn: address(farmToken),
+            assetOut: address(asset),
+            amount: _amountIn,
+            userData: abi.encode(0)
+        });
+
+        FundManagement memory funds = FundManagement({
+            sender: address(this),
+            fromInternalBalance: false,
+            recipient: payable(address(this)),
+            toInternalBalance: false
+        });
+
+        balancer.swap(singleSwap, funds, 0, block.timestamp);
+
+        /*
         BatchSwapStep[] memory swaps = new BatchSwapStep[](2);
 
         swaps[0] = BatchSwapStep({
@@ -409,7 +428,7 @@ contract Strategy is BaseStrategy {
         //limits[1] = 0;
         //limits[2] = 0;
         balancer.batchSwap(0, swaps, assets, funds, limits, block.timestamp);
-
+        */
     }
 
     /**
