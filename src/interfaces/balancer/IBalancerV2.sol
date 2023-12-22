@@ -32,6 +32,14 @@ struct ExitPoolRequest {
     bool toInternalBalance;
 }
 
+struct BatchSwapStep {
+    bytes32 poolId;
+    uint256 assetInIndex;
+    uint256 assetOutIndex;
+    uint256 amount;
+    bytes userData;
+}
+
 interface IBalancerV2 {
 
     enum JoinKind {
@@ -45,8 +53,16 @@ interface IBalancerV2 {
         FundManagement memory funds,
         uint256 limit,
         uint256 deadline
-    )
-        external;
+    ) external;
+
+    function batchSwap(
+        uint kind,
+        BatchSwapStep[] memory swaps,
+        address[] memory assets,
+        FundManagement memory funds,
+        int256[] memory limits,
+        uint256 deadline
+    ) external payable returns (int256[] memory);
 
     function joinPool(
         bytes32 poolId,

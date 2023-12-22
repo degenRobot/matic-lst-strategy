@@ -22,6 +22,7 @@ import {SingleSwap} from "./interfaces/balancer/IBalancerV2.sol";
 import {FundManagement} from "./interfaces/balancer/IBalancerV2.sol";
 import {JoinPoolRequest} from "./interfaces/balancer/IBalancerV2.sol";
 import {ExitPoolRequest} from "./interfaces/balancer/IBalancerV2.sol";
+import {BatchSwapStep} from "./interfaces/balancer/IBalancerV2.sol";
 
 import {IAura} from "./interfaces/aura/IAura.sol";
 import {IBaseRewardPool} from "./interfaces/aura/IAura.sol";
@@ -57,7 +58,7 @@ contract Strategy is BaseStrategy {
         // Tokens
         wMatic = ERC20(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
         stMatic = ERC20(0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4);
-        farmToken = IERC20(0xf28164A485B0B2C90639E47b0f377b4a438a16B1);
+        farmToken = IERC20(0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3);
 
         // AAVE Contracts
         IPoolAddressesProvider provider = IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
@@ -71,7 +72,7 @@ contract Strategy is BaseStrategy {
         balancer = IBalancerV2(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
         // Farm Contracts
-        aura = IAura(0x8b2970c237656d3895588B99a8bFe977D5618201);
+        aura = IAura(0x98Ef32edd24e2c92525E59afc4475C1242a30184);
         baseRewardPool = IBaseRewardPool(0xB97341e9DA2eA5654a0E198184F88eef630E9a63);
 
     }
@@ -293,7 +294,7 @@ contract Strategy is BaseStrategy {
     }
 
     function _depositToGauge() internal {
-        aura.depositAll(pid, true);
+        aura.deposit(pid, IERC20(lpToken).balanceOf(address(this)),true);
     }
 
     function _withdrawFromGauge(uint256 _amount) internal {
@@ -373,14 +374,23 @@ contract Strategy is BaseStrategy {
     function _sellRewards() internal {
         uint256 _amountIn = farmToken.balanceOf(address(this));
 
-        SingleSwap memory singleSwap = SingleSwap({
-            poolId: farmPoolId,
-            kind: 0,
-            assetIn: address(farmToken),
-            assetOut: address(asset),
+        BatchSwapStep[] memory swaps = new BatchSwapStep[](2);
+
+        swaps[0] = BatchSwapStep({
+            poolId: 0xeb58be542e77195355d90100beb07105b9bd295e00010000000000000000001b,
+            assetInIndex: 0,
+            assetOutIndex: 1,
             amount: _amountIn,
             userData: abi.encode(0)
         });
+
+        swaps[1] = BatchSwapStep({
+            poolId: 0x9e7fd25ad9d97f1e6716fa5bb04749a4621e892d000100000000000000000011,
+            assetInIndex: 1,
+            assetOutIndex: 2,
+            amount: 0,
+            userData: abi.encode(0)
+        });        
 
         FundManagement memory funds = FundManagement({
             sender: address(this),
@@ -389,7 +399,16 @@ contract Strategy is BaseStrategy {
             toInternalBalance: false
         });
 
-        balancer.swap(singleSwap, funds, 0, block.timestamp);
+        address[] memory assets = new address[](3);
+        assets[0] = address(farmToken);
+        assets[1] = 0xFbdd194376de19a88118e84E279b977f165d01b8;
+        assets[2] = address(asset);
+
+        int256[] memory limits = new int256[](3);
+        limits[0] = int256(_amountIn);
+        //limits[1] = 0;
+        //limits[2] = 0;
+        balancer.batchSwap(0, swaps, assets, funds, limits, block.timestamp);
 
     }
 
@@ -464,13 +483,6 @@ contract Strategy is BaseStrategy {
 
         baseRewardPool.getReward(address(this), true);
         _sellRewards();
-        // TODO: Implement harvesting logic and accurate accounting EX:
-        //
-        //      if(!TokenizedStrategy.isShutdown()) {
-        //          _claimAndSellRewards();
-        //      }
-        //      _totalAssets = aToken.balanceOf(address(this)) + asset.balanceOf(address(this));
-        //
         _totalAssets = asset.balanceOf(address(this)) + balanceDeployed();
     }
 
