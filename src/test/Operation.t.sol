@@ -22,6 +22,8 @@ contract OperationTest is Setup {
     function test_operation(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
+        console.log(strategy.getOraclePriceLst());
+
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 

@@ -8,7 +8,7 @@ struct SingleSwap {
     address assetIn;
     address assetOut;
     uint256 amount;
-    uint userData;
+    bytes userData;
 }
 
 struct FundManagement {

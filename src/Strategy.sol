@@ -84,7 +84,9 @@ contract Strategy is BaseStrategy {
         stMatic.approve(address(balancer), type(uint256).max);
         farmToken.approve(address(balancer), type(uint256).max);
         
-        ERC20(lpToken).approve(address(aura), type(uint256).max);
+        // to deposit into Aura 
+        address boosterLite = 0x98Ef32edd24e2c92525E59afc4475C1242a30184;
+        ERC20(lpToken).approve(boosterLite, type(uint256).max);
         ERC20(lpToken).approve(address(balancer), type(uint256).max);
 
     }
@@ -102,7 +104,7 @@ contract Strategy is BaseStrategy {
     uint256 public collatTarget = 6000;
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
-    uint256 public slippageAdj = 9000; // 99%
+    uint256 public slippageAdj = 9900; // 99%
     uint256 public basisPrecision = 10000;
 
     // max Amount of wMatic to be deployed any give time assets deployed (to avoid slippage)
@@ -118,7 +120,7 @@ contract Strategy is BaseStrategy {
     IAura public aura;
     IBaseRewardPool public baseRewardPool;
 
-    uint256 pid;
+    uint256 pid = 5;
 
     bytes32 public poolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
     bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
@@ -323,7 +325,7 @@ contract Strategy is BaseStrategy {
     function _swapToStMatic(uint256 _amountIn) internal {
 
         uint256 oPrice = getOraclePriceLst();
-        uint256 _minOut = (_amountIn * oPrice / basisPrecision) * slippageAdj / basisPrecision;
+        uint256 _minOut = (_amountIn * basisPrecision / oPrice) * slippageAdj / basisPrecision;
 
         SingleSwap memory singleSwap = SingleSwap({
             poolId: poolId,
@@ -331,7 +333,7 @@ contract Strategy is BaseStrategy {
             assetIn: address(wMatic),
             assetOut: address(stMatic),
             amount: _amountIn,
-            userData: 0
+            userData: abi.encode(0)
         });
 
         FundManagement memory funds = FundManagement({
@@ -354,7 +356,7 @@ contract Strategy is BaseStrategy {
             assetIn: address(stMatic),
             assetOut: address(wMatic),
             amount: _amountIn,
-            userData: 0
+            userData: abi.encode(0)
         });
 
         FundManagement memory funds = FundManagement({
@@ -377,7 +379,7 @@ contract Strategy is BaseStrategy {
             assetIn: address(farmToken),
             assetOut: address(asset),
             amount: _amountIn,
-            userData: 0
+            userData: abi.encode(0)
         });
 
         FundManagement memory funds = FundManagement({
