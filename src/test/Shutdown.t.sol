@@ -16,8 +16,8 @@ contract ShutdownTest is Setup {
 
         // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
-        assertEq(strategy.totalDebt(), 0, "!totalDebt");
-        assertEq(strategy.totalIdle(), _amount, "!totalIdle");
+        assertEq(strategy.totalDebt(), _amount, "!totalDebt");
+        assertEq(strategy.totalIdle(), 0, "!totalIdle");
 
         // Earn Interest
         skip(1 days);
@@ -28,8 +28,8 @@ contract ShutdownTest is Setup {
 
         // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
-        assertEq(strategy.totalDebt(), 0, "!totalDebt");
-        assertEq(strategy.totalIdle(), _amount, "!totalIdle");
+        assertEq(strategy.totalDebt(), _amount, "!totalDebt");
+        assertEq(strategy.totalIdle(), 0, "!totalIdle");
 
         // Make sure we can still withdraw the full amount
         uint256 balanceBefore = asset.balanceOf(user);

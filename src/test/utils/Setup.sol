@@ -25,6 +25,7 @@ interface IPoolConfigurator {
 contract Setup is ExtendedTest, IEvents {
     // Contract instances that we will use repeatedly.
     ERC20 public asset;
+    ERC20 public rewardToken;
     IStrategyInterface public strategy;
 
     mapping(string => address) public tokenAddrs;
@@ -45,6 +46,8 @@ contract Setup is ExtendedTest, IEvents {
     // Integer variables that will be used repeatedly.
     uint256 public decimals;
     uint256 public MAX_BPS = 10_000;
+    uint256 public rewardPrice = 45_000;
+
 
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
     uint256 public maxFuzzAmount = 1e11;
@@ -55,7 +58,16 @@ contract Setup is ExtendedTest, IEvents {
 
     function setUp() public virtual {
         // Set asset
-        asset = ERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);    
+
+        // USDC.e
+        //asset = ERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);    
+
+        // USDC
+        asset = ERC20(0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359);    
+    
+
+        // BAL 
+        rewardToken = ERC20(0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3);
         // Set decimals
         decimals = asset.decimals();
 

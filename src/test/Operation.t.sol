@@ -29,8 +29,8 @@ contract OperationTest is Setup {
 
         // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
-        assertEq(strategy.totalDebt(), 0, "!totalDebt");
-        assertEq(strategy.totalIdle(), _amount, "!totalIdle");
+        assertEq(strategy.totalDebt(), _amount, "!totalDebt");
+        assertEq(strategy.totalIdle(), 0, "!totalIdle");
 
         // Earn Interest
         skip(1 days);
@@ -70,15 +70,19 @@ contract OperationTest is Setup {
 
         // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
-        assertEq(strategy.totalDebt(), 0, "!totalDebt");
-        assertEq(strategy.totalIdle(), _amount, "!totalIdle");
+        assertEq(strategy.totalDebt(), _amount, "!totalDebt");
+        assertEq(strategy.totalIdle(), 0, "!totalIdle");
 
         // Earn Interest
         skip(1 days);
 
         // TODO: implement logic to simulate earning interest.
+
         uint256 toAirdrop = (_amount * _profitFactor) / MAX_BPS;
-        airdrop(asset, address(strategy), toAirdrop);
+
+        uint256 airdropAmt = (toAirdrop * MAX_BPS / rewardPrice) / (1e12);
+
+        airdrop(rewardToken, address(strategy), toAirdrop);
 
         // Report profit
         vm.prank(keeper);
@@ -118,8 +122,8 @@ contract OperationTest is Setup {
 
         // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
-        assertEq(strategy.totalDebt(), 0, "!totalDebt");
-        assertEq(strategy.totalIdle(), _amount, "!totalIdle");
+        assertEq(strategy.totalDebt(), _amount, "!totalDebt");
+        assertEq(strategy.totalIdle(), 0, "!totalIdle");
 
         // Earn Interest
         skip(1 days);
