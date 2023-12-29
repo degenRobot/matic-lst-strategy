@@ -124,7 +124,7 @@ contract Strategy is BaseStrategy {
     uint256 public collatTarget = 6000;
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
-    uint256 public slippageAdj = 9800; // 99%
+    uint256 public slippageAdj = 9950; // 99%
     uint256 public basisPrecision = 10000;
 
     // max Amount of wMatic to be deployed any give time assets deployed (to avoid slippage)
@@ -133,6 +133,7 @@ contract Strategy is BaseStrategy {
     IPool public pool;
     IAToken public aToken;
     IVariableDebtToken public debtToken;
+
     IAaveOracle public oracle;
 
     IBalancerV2 public balancer;
@@ -140,7 +141,7 @@ contract Strategy is BaseStrategy {
     IAura public aura;
     IBaseRewardPool public baseRewardPool;
 
-    uint256 pid = 5;
+    uint256 public pid = 5;
 
     bytes32 public poolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
     bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
@@ -168,13 +169,15 @@ contract Strategy is BaseStrategy {
         uint256 oPrice = getOraclePrice();
         uint256 _borrowAmt = (_amount * collatTarget / basisPrecision) * 1e18 / oPrice;
 
+        (uint256 _wMaticWeight, uint256 _lpValue) = getLpData();
+
         if (_borrowAmt > maxDeploy) {
             _borrowAmt = maxDeploy;
         }  
         _borrow(_borrowAmt);
-        
+
         // Swap wMatic for stMatic and enter pool 
-        uint256 _swapAmt = _borrowAmt * (basisPrecision - getPoolWMaticWeight()) / basisPrecision;
+        uint256 _swapAmt = (_borrowAmt * (basisPrecision - _wMaticWeight) / basisPrecision) * 1e18 / (1e18 * ( 1 + _borrowAmt / _lpValue) );
         _swapToStMatic(_swapAmt);
         _joinPool();
         _depositToGauge();
@@ -284,6 +287,23 @@ contract Strategy is BaseStrategy {
         return stMaticPrice*(basisPrecision)/wMaticPrice;
     }
 
+    function getLpData() public view returns (uint256 _wMaticWeight, uint256 _totalValue) {
+        (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
+
+        uint256 _oPrice = getOraclePriceLst();
+        if (tokens[0] == address(wMatic)) {
+            _totalValue += balances[0];
+            _totalValue += balances[1] * _oPrice / basisPrecision;
+            _wMaticWeight = balances[0] * basisPrecision / _totalValue;
+        } else {
+            _totalValue += balances[1];
+            _totalValue += balances[0] * _oPrice / basisPrecision;
+            _wMaticWeight = balances[1] * basisPrecision / _totalValue;
+        }
+        
+
+    }
+
     function getPoolWMaticWeight() public view returns (uint256 _wMaticWeight) {
         (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
 
@@ -326,7 +346,7 @@ contract Strategy is BaseStrategy {
             bptOut = (amtsIn[0] * gaugeSupply / balances[0]) * slippageAdj / basisPrecision;
         }
 
-        bytes memory userData = abi.encode(IBalancerV2.JoinKind.TOKEN_IN_FOR_EXACT_BPT_OUT, bptOut);
+        bytes memory userData = abi.encode(IBalancerV2.JoinKind.ALL_TOKENS_IN_FOR_EXACT_BPT_OUT, bptOut);
 
 
         // Create the JoinPoolRequest struct in memory
@@ -587,9 +607,10 @@ contract Strategy is BaseStrategy {
             _borrowAmt = maxDeploy;
         }  
         _borrow(_borrowAmt);
-        
+
+        (uint256 _wMaticWeight, uint256 _lpValue) = getLpData();
         // Swap wMatic for stMatic and enter pool 
-        uint256 _swapAmt = _borrowAmt * (basisPrecision - getPoolWMaticWeight()) / basisPrecision;
+        uint256 _swapAmt = (_borrowAmt * (basisPrecision - _wMaticWeight) / basisPrecision) * 1e18 / (1e18 * ( 1 + _borrowAmt / _lpValue) );
         _swapToStMatic(_swapAmt);
         _joinPool();
         _depositToGauge();
