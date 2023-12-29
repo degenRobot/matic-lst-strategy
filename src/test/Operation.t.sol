@@ -47,6 +47,14 @@ contract OperationTest is Setup {
 
         uint256 balanceBefore = asset.balanceOf(user);
 
+        console.log('total assets', strategy.totalAssets());
+        console.log('balance lp ', strategy.balanceLp());
+        console.log('balance lend ', strategy.balanceLend());
+        console.log('balance debt ', strategy.balanceDebt());
+
+        console.log('wMatic Balance ', wMatic.balanceOf(address(strategy)));
+        console.log('stMatic Balance ', stMatic.balanceOf(address(strategy)));
+
         // Withdraw all funds
         vm.prank(user);
         strategy.redeem(_amount, user, user);

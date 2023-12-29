@@ -6,4 +6,7 @@ import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
 interface IStrategyInterface is IStrategy {
     //TODO: Add your specific implementation interface in here.
     function getOraclePriceLst() external view returns (uint256);
+    function balanceLp() external view returns (uint256);
+    function balanceDebt() external view returns (uint256);
+    function balanceLend() external view returns (uint256);
 }

@@ -26,6 +26,10 @@ contract Setup is ExtendedTest, IEvents {
     // Contract instances that we will use repeatedly.
     ERC20 public asset;
     ERC20 public rewardToken;
+
+    ERC20 public wMatic;
+    ERC20 public stMatic;
+
     IStrategyInterface public strategy;
 
     mapping(string => address) public tokenAddrs;
@@ -39,7 +43,11 @@ contract Setup is ExtendedTest, IEvents {
     // Address of the real deployed Factory
     address public factory;
 
-    
+    address public assetOut = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+    address public aToken = 0xA4D94019934D8333Ef880ABFFbF2FDd611C762BD;
+    bool public swapViaQuick = true;
+
+
     address public constant AAVE_ADMIN = 0xDf7d0e6454DB638881302729F5ba99936EaAB233;
     IPoolConfigurator public poolConfigurator;
 
@@ -64,8 +72,10 @@ contract Setup is ExtendedTest, IEvents {
 
         // USDC
         asset = ERC20(0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359);    
-    
 
+
+        wMatic = ERC20(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
+        stMatic = ERC20(0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4);
         // BAL 
         rewardToken = ERC20(0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3);
         // Set decimals
@@ -88,12 +98,14 @@ contract Setup is ExtendedTest, IEvents {
     function setUpStrategy() public returns (address) {
         // we save the strategy as a IStrategyInterface to give it the needed interface
         IStrategyInterface _strategy = IStrategyInterface(
-            address(new Strategy(address(asset), "Tokenized Strategy"))
+            address(new Strategy(address(asset), assetOut , aToken , swapViaQuick ,"Tokenized Strategy"))
         );
 
+        /*
         poolConfigurator = IPoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
         vm.prank(AAVE_ADMIN);
         poolConfigurator.setSupplyCap(address(asset), 0);
+        */
 
         // set keeper
         _strategy.setKeeper(keeper);

@@ -47,9 +47,15 @@ contract Strategy is BaseStrategy {
 
     constructor(
         address _asset,
+        address _assetOut, // what we swap for via bal when converting to asset
+        address _aToken,
+        bool _swapViaQuick,
         string memory _name
     ) BaseStrategy(_asset, _name) {
 
+        aToken = IAToken(_aToken);
+        swapViaQuick = _swapViaQuick;
+        assetOut = ERC20(_assetOut);
         _setInterfaces();
         _approveContracts();
 
@@ -66,13 +72,7 @@ contract Strategy is BaseStrategy {
         IPoolAddressesProvider provider = IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
         pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
         oracle = IAaveOracle(provider.getPriceOracle());
-        // USDC.e
-        //aToken = IAToken(0x625E7708f30cA75bfd92586e17077590C60eb4cD);
-        
-        // USDC 
-        aToken = IAToken(0xA4D94019934D8333Ef880ABFFbF2FDd611C762BD);
 
-        usdce = ERC20(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174);
 
         debtToken = IVariableDebtToken(0x4a1c3aD6Ed28a636ee1751C69071f6be75DEb8B8);  
 
@@ -93,7 +93,9 @@ contract Strategy is BaseStrategy {
     function _approveContracts() internal {
         asset.approve(address(pool), type(uint256).max);   
         wMatic.approve(address(pool), type(uint256).max);
-        usdce.approve(address(router), type(uint256).max);
+
+        assetOut.approve(address(router), type(uint256).max);
+        
         wMatic.approve(address(balancer), type(uint256).max);
         stMatic.approve(address(balancer), type(uint256).max);
         farmToken.approve(address(balancer), type(uint256).max);
@@ -112,8 +114,11 @@ contract Strategy is BaseStrategy {
 
     ERC20 public wMatic;
     ERC20 public stMatic;
-    ERC20 public usdce;
+    ERC20 public assetOut;
     IERC20 public farmToken;
+
+    // If need to swap via quick i.e. if we need to swap USDC.e to USDC
+    bool public swapViaQuick;
 
     uint256 public collatUpper = 6700;
     uint256 public collatTarget = 6000;
@@ -191,6 +196,29 @@ contract Strategy is BaseStrategy {
 
     // TO DO get Value of LP 
     function balanceLp() public view returns (uint256) {
+
+        (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
+
+        uint256 _oPrice = getOraclePrice();
+        uint256 _oPriceLst = getOraclePriceLst();
+        uint256 gaugeTokens = baseRewardPool.balanceOf(address(this));
+        uint256 gaugeSupply = IERC20(lpToken).totalSupply();
+
+
+        // we get the total value in the LP pool priced in wMatic 
+        uint256 _totalValue;
+
+        if (tokens[0] == address(wMatic)) {
+            _totalValue += balances[0];
+            _totalValue += balances[1] * _oPriceLst / basisPrecision;
+        } else {
+            _totalValue += balances[1];
+            _totalValue += balances[0] * _oPriceLst / basisPrecision;
+        }
+
+        // calculate strategies value of LP tokens in asset price
+        return ((gaugeTokens * _totalValue / gaugeSupply) * _oPrice / 1e18);
+
 
     }
 
@@ -298,7 +326,7 @@ contract Strategy is BaseStrategy {
             bptOut = (amtsIn[0] * gaugeSupply / balances[0]) * slippageAdj / basisPrecision;
         }
 
-        bytes memory userData = abi.encode(IBalancerV2.JoinKind.ALL_TOKENS_IN_FOR_EXACT_BPT_OUT, bptOut);
+        bytes memory userData = abi.encode(IBalancerV2.JoinKind.TOKEN_IN_FOR_EXACT_BPT_OUT, bptOut);
 
 
         // Create the JoinPoolRequest struct in memory
@@ -396,7 +424,7 @@ contract Strategy is BaseStrategy {
             poolId: 0x0297e37f1873d2dab4487aa67cd56b58e2f27875000100000000000000000002,
             kind: 0,
             assetIn: address(wMatic),
-            assetOut: address(usdce),
+            assetOut: address(assetOut),
             amount: _amountIn,
             userData: abi.encode(0)
         });
@@ -410,7 +438,9 @@ contract Strategy is BaseStrategy {
 
         balancer.swap(singleSwap, funds, 0, block.timestamp);
 
-        _swapUSDCetoUSDC();
+        if (swapViaQuick) {
+            _swapUSDCetoUSDC();
+        }
         
     }
 
@@ -421,7 +451,7 @@ contract Strategy is BaseStrategy {
             poolId: 0x0297e37f1873d2dab4487aa67cd56b58e2f27875000100000000000000000002,
             kind: 0,
             assetIn: address(farmToken),
-            assetOut: address(usdce),
+            assetOut: address(assetOut),
             amount: _amountIn,
             userData: abi.encode(0)
         });
@@ -435,19 +465,20 @@ contract Strategy is BaseStrategy {
 
         balancer.swap(singleSwap, funds, 0, block.timestamp);
 
-        _swapUSDCetoUSDC();
-
+        if (swapViaQuick) {
+            _swapUSDCetoUSDC();
+        }
     }
 
     function _swapUSDCetoUSDC() internal {
 
-        uint256 _amount = usdce.balanceOf(address(this));
+        uint256 _amount = assetOut.balanceOf(address(this));
         // asssuming 1 for 1 USDCe to USDC 
         uint256 amountOut = _amount;
 
         ExactInputSingleParams memory input;
         input.amountIn = _amount;
-        input.tokenIn = address(usdce);
+        input.tokenIn = address(assetOut);
         input.tokenOut = address(asset);
         input.recipient = address(this);
         input.deadline = block.timestamp;
