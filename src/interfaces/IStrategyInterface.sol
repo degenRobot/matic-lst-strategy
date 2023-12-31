@@ -9,4 +9,6 @@ interface IStrategyInterface is IStrategy {
     function balanceLp() external view returns (uint256);
     function balanceDebt() external view returns (uint256);
     function balanceLend() external view returns (uint256);
+    function setCollatTargets(uint256 _collatLow, uint256 _collatTarget, uint256 _collatHigh) external;
+    
 }

@@ -124,7 +124,11 @@ contract Strategy is BaseStrategy {
     uint256 public collatTarget = 6000;
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
+
+    uint256 public swapPercentAdj = 10500; // 105%
     uint256 public slippageAdj = 9950; // 99%
+    uint256 public slippageAdjSwap = 9900; // 99%    
+    uint256 public slippageAdjPool = 9950; // 95%
     uint256 public basisPrecision = 10000;
 
     // max Amount of wMatic to be deployed any give time assets deployed (to avoid slippage)
@@ -146,8 +150,18 @@ contract Strategy is BaseStrategy {
     bytes32 public poolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
     bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
 
-
     IRouter public router;
+
+    function setCollatTargets(uint256 _collatLow, uint256 _collatTarget, uint256 _collatHigh) external onlyManagement {
+        require(_collatLow < _collatTarget);
+        require(_collatTarget < _collatHigh);
+        require(_collatHigh < collatLimit);
+
+        collatLower = _collatLow;
+        collatTarget = _collatTarget;
+        collatUpper = _collatHigh;
+
+    }
 
     /**
      * @dev Should deploy up to '_amount' of 'asset' in the yield source.
@@ -177,7 +191,7 @@ contract Strategy is BaseStrategy {
         _borrow(_borrowAmt);
 
         // Swap wMatic for stMatic and enter pool 
-        uint256 _swapAmt = (_borrowAmt * (basisPrecision - _wMaticWeight) / basisPrecision) * 1e18 / (1e18 * ( 1 + _borrowAmt / _lpValue) );
+        uint256 _swapAmt = (_borrowAmt * (basisPrecision - _wMaticWeight) / swapPercentAdj) * 1e18 / (1e18 * ( 1 + _borrowAmt / _lpValue) );
         _swapToStMatic(_swapAmt);
         _joinPool();
         _depositToGauge();
@@ -340,10 +354,10 @@ contract Strategy is BaseStrategy {
         uint256 gaugeSupply = IERC20(lpToken).totalSupply();
         (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
 
-        if (tokens[0] == address(wMatic)) {
-            bptOut = (amtsIn[1] * gaugeSupply / balances[1]) * slippageAdj / basisPrecision;
+        if (tokens[0] == address(stMatic)) {
+            bptOut = (amtsIn[1] * gaugeSupply / balances[0]) * slippageAdjPool / basisPrecision;
         } else {
-            bptOut = (amtsIn[0] * gaugeSupply / balances[0]) * slippageAdj / basisPrecision;
+            bptOut = (amtsIn[1] * gaugeSupply / balances[1]) * slippageAdjPool / basisPrecision;
         }
 
         bytes memory userData = abi.encode(IBalancerV2.JoinKind.ALL_TOKENS_IN_FOR_EXACT_BPT_OUT, bptOut);
@@ -376,14 +390,16 @@ contract Strategy is BaseStrategy {
 
         (address[] memory assets, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
 
-        amtsOut[0] = (balances[0] * _amountOut / IERC20(lpToken).totalSupply()) * slippageAdj / basisPrecision;
-        amtsOut[1] = (balances[1] * _amountOut / IERC20(lpToken).totalSupply()) * slippageAdj / basisPrecision;
+        amtsOut[0] = (balances[0] * _amountOut / IERC20(lpToken).totalSupply()) * slippageAdjPool / basisPrecision;
+        amtsOut[1] = (balances[1] * _amountOut / IERC20(lpToken).totalSupply()) * slippageAdjPool / basisPrecision;
+
+        bytes memory userData = abi.encode(1, _amountOut);
 
         // Create the ExitPoolRequest struct in memory
         ExitPoolRequest memory request = ExitPoolRequest({
             assets: assets,
             minAmountsOut: amtsOut,
-            userData: bytes(""),
+            userData: userData,
             toInternalBalance: false
         });
         balancer.exitPool(poolId, address(this), payable(address(this)), request);
@@ -392,7 +408,7 @@ contract Strategy is BaseStrategy {
     function _swapToStMatic(uint256 _amountIn) internal {
 
         uint256 oPrice = getOraclePriceLst();
-        uint256 _minOut = (_amountIn * basisPrecision / oPrice) * slippageAdj / basisPrecision;
+        uint256 _minOut = (_amountIn * basisPrecision / oPrice) * slippageAdjSwap / basisPrecision;
 
         SingleSwap memory singleSwap = SingleSwap({
             poolId: poolId,
@@ -415,7 +431,7 @@ contract Strategy is BaseStrategy {
 
     function _swapToWMatic(uint256 _amountIn) internal {
         uint256 oPrice = getOraclePriceLst();
-        uint256 _minOut = (_amountIn * basisPrecision / oPrice) * slippageAdj / basisPrecision;
+        uint256 _minOut = (_amountIn * basisPrecision / oPrice) * slippageAdjSwap / basisPrecision;
 
         SingleSwap memory singleSwap = SingleSwap({
             poolId: poolId,
@@ -502,7 +518,7 @@ contract Strategy is BaseStrategy {
         input.tokenOut = address(asset);
         input.recipient = address(this);
         input.deadline = block.timestamp;
-        input.amountOutMinimum = amountOut*(slippageAdj)/(basisPrecision);
+        input.amountOutMinimum = amountOut*(slippageAdjSwap)/(basisPrecision);
         router.exactInputSingle(input);
 
     }
@@ -687,8 +703,17 @@ contract Strategy is BaseStrategy {
      *
      * @param _totalIdle The current amount of idle funds that are available to deploy.
      *
-    function _tend(uint256 _totalIdle) internal override {}
     */
+    function _tend(uint256 _totalIdle) internal override {
+        
+        uint256 cRatio = calcCollateralRatio();
+        if (cRatio >= collatUpper) {
+            _rebalanceCollateralHigh();
+        } else {
+            _rebalanceCollateralLow();
+        }        
+    }
+    
 
     /**
      * @dev Optional trigger to override if tend() will be used by the strategy.
@@ -696,8 +721,17 @@ contract Strategy is BaseStrategy {
      *
      * @return . Should return true if tend() should be called by keeper or false if not.
      *
-    function _tendTrigger() internal view override returns (bool) {}
     */
+    function _tendTrigger() internal view override returns (bool) {
+        if (calcCollateralRatio() >= collatUpper) {
+            return true;
+        } 
+        if (calcCollateralRatio() <= collatLower) {
+            return true;
+        }
+        return false;
+    }
+    
 
     /**
      * @notice Gets the max amount of `asset` that an address can deposit.
