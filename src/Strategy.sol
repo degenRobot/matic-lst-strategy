@@ -234,7 +234,7 @@ contract Strategy is BaseStrategy {
 
     }
 
-    // TO DO get Value of LP 
+    // Calculate value of LP in asset
     function balanceLp() public view returns (uint256) {
 
         (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);

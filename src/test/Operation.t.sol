@@ -199,6 +199,9 @@ contract OperationTest is Setup {
         assertEq(strategy.totalDebt(), _amount, "!totalDebt");
         assertEq(strategy.totalIdle(), 0, "!totalIdle");
 
+        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), 100, "!collatRatio");
+
+
         // Earn Interest
         skip(1 days);
 
@@ -214,7 +217,6 @@ contract OperationTest is Setup {
 
         uint256 balanceBefore = asset.balanceOf(user);
 
-        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), 100, "!collatRatio");
 
         // We drop collateral ratios then check rebalances works as intended 
         vm.prank(management);
@@ -230,21 +232,21 @@ contract OperationTest is Setup {
         // margin of error for collateral ratio after rebalance vs target c ratio
         uint256 collatMarginOfError = 500;
 
-        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), collatMarginOfError, "!collatRatio");
+        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), collatMarginOfError, "!collatRatioLow");
 
 
         // Increase collateral ratios then check rebalances work as intended 
         vm.prank(management);
-        strategy.setCollatTargets(5500, 6000, 6500);
+        strategy.setCollatTargets(4500, 5000, 5500);
 
-        assertEq(strategy.collatLower(), 5500, "!collatLow");
-        assertEq(strategy.collatTarget(), 6000, "!collatTarget");
-        assertEq(strategy.collatUpper(), 6500, "!collatUpper");
+        assertEq(strategy.collatLower(), 4500, "!collatLow");
+        assertEq(strategy.collatTarget(), 5000, "!collatTarget");
+        assertEq(strategy.collatUpper(), 5500, "!collatUpper");
 
         vm.prank(keeper);
         strategy.rebalanceCollateral();
 
-        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), collatMarginOfError, "!collatRatio");
+        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), collatMarginOfError, "!collatRatioHigh");
 
 
         // Withdraw all funds
