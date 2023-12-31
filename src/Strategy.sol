@@ -125,7 +125,7 @@ contract Strategy is BaseStrategy {
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
 
-    uint256 public swapPercentAdj = 10500; // 105%
+    uint256 public swapPercentAdj = 10250; // 102.5%
     uint256 public slippageAdj = 9950; // 99%
     uint256 public slippageAdjSwap = 9900; // 99%    
     uint256 public slippageAdjPool = 9950; // 95%
@@ -211,6 +211,18 @@ contract Strategy is BaseStrategy {
         return (balanceDebtInShort() * oPrice / 1e18);
     }
 
+    // balance of any wMatic / stMatic not deployed 
+    function balanceShort() public view returns(uint256) {
+        uint256 oPrice = getOraclePrice();
+        uint256 oPriceLst = getOraclePriceLst();
+        
+        uint256 bal = wMatic.balanceOf(address(this));
+        bal += stMatic.balanceOf(address(this)) * oPriceLst / basisPrecision;
+
+        return bal * oPrice / 1e18;
+
+    }
+
     // TO DO get Value of LP 
     function balanceLp() public view returns (uint256) {
 
@@ -240,7 +252,7 @@ contract Strategy is BaseStrategy {
     }
 
     function balanceDeployed() public view returns (uint256) {
-        return balanceLend() - balanceDebt() + balanceLp();
+        return balanceLend() - balanceDebt() + balanceLp() + balanceShort();
     }
 
     function calcCollateralRatio() public view returns (uint256) {
@@ -626,7 +638,7 @@ contract Strategy is BaseStrategy {
 
         (uint256 _wMaticWeight, uint256 _lpValue) = getLpData();
         // Swap wMatic for stMatic and enter pool 
-        uint256 _swapAmt = (_borrowAmt * (basisPrecision - _wMaticWeight) / basisPrecision) * 1e18 / (1e18 * ( 1 + _borrowAmt / _lpValue) );
+        uint256 _swapAmt = (_borrowAmt * (basisPrecision - _wMaticWeight) / swapPercentAdj) * 1e18 / (1e18 * ( 1 + _borrowAmt / _lpValue) );
         _swapToStMatic(_swapAmt);
         _joinPool();
         _depositToGauge();
@@ -723,6 +735,8 @@ contract Strategy is BaseStrategy {
      *
     */
     function _tendTrigger() internal view override returns (bool) {
+        if (balanceLend() == 0) return false;
+
         if (calcCollateralRatio() >= collatUpper) {
             return true;
         } 

@@ -9,7 +9,7 @@ size  :; forge build --sizes
 inspect :; forge inspect ${contract} storage-layout --pretty
 
 FORK_URL := ${MATIC_RPC_URL} 
-test = test_operation
+test = test_collateral_rebalance
 
 # local tests without fork
 test  :; forge test -vv --fork-url ${FORK_URL} --etherscan-api-key ${ETHERSCAN_API_KEY}

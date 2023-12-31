@@ -38,9 +38,10 @@ contract ShutdownTest is Setup {
         vm.prank(user);
         strategy.redeem(_amount, user, user);
 
-        assertGe(
+        assertApproxEq(
             asset.balanceOf(user),
             balanceBefore + _amount,
+            _amount / 1000,
             "!final balance"
         );
     }

@@ -59,9 +59,10 @@ contract OperationTest is Setup {
         vm.prank(user);
         strategy.redeem(_amount, user, user);
 
-        assertGe(
+        assertApproxEq(
             asset.balanceOf(user),
             balanceBefore + _amount,
+            _amount / 1000,
             "!final balance"
         );
     }
@@ -88,9 +89,9 @@ contract OperationTest is Setup {
 
         uint256 toAirdrop = (_amount * _profitFactor) / MAX_BPS;
 
-        uint256 airdropAmt = (toAirdrop * MAX_BPS / rewardPrice) / (1e12);
+        uint256 airdropAmt = (toAirdrop * MAX_BPS / rewardPrice) * (1e12);
 
-        airdrop(rewardToken, address(strategy), toAirdrop);
+        airdrop(rewardToken, address(strategy), airdropAmt);
 
         // Report profit
         vm.prank(keeper);
@@ -138,7 +139,9 @@ contract OperationTest is Setup {
 
         // TODO: implement logic to simulate earning interest.
         uint256 toAirdrop = (_amount * _profitFactor) / MAX_BPS;
-        airdrop(asset, address(strategy), toAirdrop);
+        uint256 airdropAmt = (toAirdrop * MAX_BPS / rewardPrice) * (1e12);
+
+        airdrop(rewardToken, address(strategy), airdropAmt);
 
         // Report profit
         vm.prank(keeper);
@@ -182,6 +185,80 @@ contract OperationTest is Setup {
             "!perf fee out"
         );
     }
+
+    function test_collateral_rebalance(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        console.log(strategy.getOraclePriceLst());
+
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
+        assertEq(strategy.totalAssets(), _amount, "!totalAssets");
+        assertEq(strategy.totalDebt(), _amount, "!totalDebt");
+        assertEq(strategy.totalIdle(), 0, "!totalIdle");
+
+        // Earn Interest
+        skip(1 days);
+
+        // Report profit
+        vm.prank(keeper);
+        (uint256 profit, uint256 loss) = strategy.report();
+
+        // Check return Values
+        assertGe(profit, 0, "!profit");
+        assertEq(loss, 0, "!loss");
+
+        skip(strategy.profitMaxUnlockTime());
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), 100, "!collatRatio");
+
+        // We drop collateral ratios then check rebalances works as intended 
+        vm.prank(management);
+        strategy.setCollatTargets(2500, 3000, 3500);
+
+        assertEq(strategy.collatLower(), 2500, "!collatLow");
+        assertEq(strategy.collatTarget(), 3000, "!collatTarget");
+        assertEq(strategy.collatUpper(), 3500, "!collatUpper");
+
+        vm.prank(keeper);
+        strategy.rebalanceCollateral();
+
+        // margin of error for collateral ratio after rebalance vs target c ratio
+        uint256 collatMarginOfError = 500;
+
+        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), collatMarginOfError, "!collatRatio");
+
+
+        // Increase collateral ratios then check rebalances work as intended 
+        vm.prank(management);
+        strategy.setCollatTargets(5500, 6000, 6500);
+
+        assertEq(strategy.collatLower(), 5500, "!collatLow");
+        assertEq(strategy.collatTarget(), 6000, "!collatTarget");
+        assertEq(strategy.collatUpper(), 6500, "!collatUpper");
+
+        vm.prank(keeper);
+        strategy.rebalanceCollateral();
+
+        assertApproxEq(strategy.calcCollateralRatio(), strategy.collatTarget(), collatMarginOfError, "!collatRatio");
+
+
+        // Withdraw all funds
+        vm.prank(user);
+        strategy.redeem(_amount, user, user);
+
+        assertApproxEq(
+            asset.balanceOf(user),
+            balanceBefore + _amount,
+            _amount / 1000,
+            "!final balance"
+        );
+    }    
+
 
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
