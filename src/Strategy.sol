@@ -67,6 +67,7 @@ contract Strategy is BaseStrategy {
         wMatic = ERC20(0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270);
         stMatic = ERC20(0x3A58a54C066FdC0f2D55FC9C89F0415C92eBf3C4);
         farmToken = IERC20(0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3);
+        auraToken = IERC20(0x1509706a6c66CA549ff0cB464de88231DDBe213B);
 
         // AAVE Contracts
         IPoolAddressesProvider provider = IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb);
@@ -116,6 +117,7 @@ contract Strategy is BaseStrategy {
     ERC20 public stMatic;
     ERC20 public assetOut;
     IERC20 public farmToken;
+    IERC20 public auraToken;
 
     // If need to swap via quick i.e. if we need to swap USDC.e to USDC
     bool public swapViaQuick;
@@ -125,10 +127,10 @@ contract Strategy is BaseStrategy {
     uint256 public collatLower = 5300;
     uint256 public collatLimit = 7500;
 
-    uint256 public swapPercentAdj = 10250; // 102.5%
-    uint256 public slippageAdj = 9950; // 99%
-    uint256 public slippageAdjSwap = 9900; // 99%    
-    uint256 public slippageAdjPool = 9950; // 95%
+    // this is used to adj amount of wMatic swapped to better align weights to pool weights 
+    uint256 public swapPercentAdj = 10150; // 101.5%
+    uint256 public slippageAdjSwap = 9950; // 99.5%    
+    uint256 public slippageAdjPool = 9950; // 99.5%
     uint256 public basisPrecision = 10000;
 
     // max Amount of wMatic to be deployed any give time assets deployed (to avoid slippage)
@@ -148,7 +150,7 @@ contract Strategy is BaseStrategy {
     uint256 public pid = 5;
 
     bytes32 public poolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
-    bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
+    //bytes32 public farmPoolId = 0xf0ad209e2e969eaaa8c882aac71f02d8a047d5c2000200000000000000000b49;
 
     IRouter public router;
 
@@ -161,6 +163,15 @@ contract Strategy is BaseStrategy {
         collatTarget = _collatTarget;
         collatUpper = _collatHigh;
 
+    }
+
+    function setMaxDeploy(uint256 _maxDeploy) external onlyManagement {
+        maxDeploy = _maxDeploy;
+    }
+
+    // Placeholder to potentially withdraw AURA to multi-sig & bridge then swap (as no LP on Polygon to swap)
+    function withdrawAura(address _recipient) external onlyManagement {
+        auraToken.transfer(_recipient, auraToken.balanceOf(address(this)));
     }
 
     /**
@@ -629,7 +640,8 @@ contract Strategy is BaseStrategy {
         require(cRatio <= collatLower);
 
         uint256 oPrice = getOraclePrice();
-        uint256 _borrowAmt = (balanceLend() * (collatTarget - cRatio) / basisPrecision) * 1e18 / oPrice;
+        uint256 _amount = balanceLend();
+        uint256 _borrowAmt = (_amount * (collatTarget - cRatio) / basisPrecision) * 1e18 / oPrice;
 
         if (_borrowAmt > maxDeploy) {
             _borrowAmt = maxDeploy;

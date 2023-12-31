@@ -54,7 +54,7 @@ contract Setup is ExtendedTest, IEvents {
     // Integer variables that will be used repeatedly.
     uint256 public decimals;
     uint256 public MAX_BPS = 10_000;
-    uint256 public rewardPrice = 40_000;
+    uint256 public rewardPrice = 36_000;
 
 
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
