@@ -165,6 +165,15 @@ contract Strategy is BaseStrategy {
 
     }
 
+    function setSlippageConfig(uint256 _slippageSwap, uint256 _slippagePool) external onlyManagement {
+        require(_slippageSwap < basisPrecision);
+        require(_slippagePool < basisPrecision);
+
+        slippageAdjSwap = _slippageSwap;
+        slippageAdjPool = _slippagePool;
+
+    }
+
     function setMaxDeploy(uint256 _maxDeploy) external onlyManagement {
         maxDeploy = _maxDeploy;
     }
