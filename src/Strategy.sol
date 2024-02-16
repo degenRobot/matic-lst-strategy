@@ -333,6 +333,7 @@ contract Strategy is BaseStrategy {
         return stMaticPrice*(basisPrecision)/wMaticPrice;
     }
 
+    // Fetches relevant data from balancer pool (weight of wMatic, total value of LP tokens in pool)  
     function getLpData() public view returns (uint256 _wMaticWeight, uint256 _totalValue) {
         (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
 
@@ -350,29 +351,9 @@ contract Strategy is BaseStrategy {
 
     }
 
-    function getPoolWMaticWeight() public view returns (uint256 _wMaticWeight) {
-        (address[] memory tokens, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
-
-        uint256 _oPrice = getOraclePriceLst();
-        uint256 _totalValue;
-        if (tokens[0] == address(wMatic)) {
-            _totalValue += balances[0];
-            _totalValue += balances[1] * _oPrice / basisPrecision;
-            _wMaticWeight = balances[0] * basisPrecision / _totalValue;
-        } else {
-            _totalValue += balances[1];
-            _totalValue += balances[0] * _oPrice / basisPrecision;
-            _wMaticWeight = balances[1] * basisPrecision / _totalValue;
-        }
-        
-
-
-    }
-
+    // Deposit wMatic & stMatic into balancer pool
     function _joinPool() internal {
 
-        // Also assuming JoinPoolRequest struct is defined appropriately
-        // Explicitly declare arrays as memory arrays
         address[] memory assets = new address[](2);
         uint256[] memory amtsIn = new uint256[](2);
 
@@ -405,19 +386,19 @@ contract Strategy is BaseStrategy {
         balancer.joinPool(poolId, address(this), address(this), request);
     }
 
+    // Deposit Lp tokens into Aura Gauge
     function _depositToGauge() internal {
         aura.deposit(pid, IERC20(lpToken).balanceOf(address(this)),true);
     }
 
+    // Withdraw Lp tokens from Aura Gauge
     function _withdrawFromGauge(uint256 _amount) internal {
         baseRewardPool.withdrawAndUnwrap(_amount, false);
     }
 
+    // Unwinds LP position and exits pool
     function _exitPool(uint256 _amountOut) internal {
 
-
-        // Also assuming ExitPoolRequest struct is defined appropriately
-        // Explicitly declare arrays as memory arrays
         uint256[] memory amtsOut = new uint256[](2);
 
         (address[] memory assets, uint256[] memory balances,) = balancer.getPoolTokens(poolId);
@@ -437,6 +418,7 @@ contract Strategy is BaseStrategy {
         balancer.exitPool(poolId, address(this), payable(address(this)), request);
     }
 
+    // Used to swap wMatic to stMatic via balancer 
     function _swapToStMatic(uint256 _amountIn) internal {
 
         uint256 oPrice = getOraclePriceLst();
